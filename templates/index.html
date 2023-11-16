@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>HDR Image Processing</title>
+        <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        form {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        input[type="file"],
+        input[type="text"] {
+            width: 100%;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h1>Создание HDR</h1>
+    <div style="text-align: center;">
+        <img src="{{ url_for('results', filename='Logo_Color_No-BG.png') }}" alt="Герб МГТУ им. Н.Э. Баумана" style="max-width: 200px; margin: 20px 0;">
+    </div>
+    <form action="/process" method="post" enctype="multipart/form-data">
+        <div>
+            <label for="images">Выберите изображения:</label>
+            <input type="file" id="images" name="images" multiple>
+        </div>
+        <div>
+            <label for="exposure_times">Введите времена экспозиции (через запятую):</label>
+            <input type="text" id="exposure_times" name="exposure_times">
+        </div>
+        <button type="submit">Создать HDR</button>
+    </form>
+</body>
+</html>
