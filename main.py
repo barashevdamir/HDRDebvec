@@ -449,4 +449,4 @@ def results(filename):
     return send_from_directory('results', filename)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run()
