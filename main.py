@@ -52,30 +52,6 @@ class HDR:
         # Коэффициент веса для плавности кривых отклика
         self.l = 10
 
-    def displayImages(self, figureSize):
-        '''
-        Метод displayImages используется для визуализации исходных изображений с разной экспозицией.
-        Это помогает визуально оценить, какие области каждого изображения хорошо экспонированы, а какие нет.
-
-        '''
-        offset = 50
-        Canvas = np.ones((self.row, (self.col + offset) * self.N, 3), dtype=np.float32)
-
-        for l in range(self.N):
-            c1 = l * (self.col + offset)
-            c2 = c1 + self.col
-            Canvas[0:self.row, c1:c2, :] = (self.images[l] / 255).astype(np.float32)
-
-        fig = plt.figure(constrained_layout=False, figsize=figureSize)
-        plt.imshow(cv2.cvtColor(Canvas[:, :c2, :], cv2.COLOR_BGR2RGB))
-        plt.title("Исходные изображения", fontsize=20)
-        plt.xticks([])
-        plt.yticks([])
-        plt.show()
-        output_path = os.path.join('results', 'originals.png')
-        fig.savefig(output_path)
-
-
     def weightingFunction(self):
         '''
         Метод weightingFunction создает весовую функцию, которая придает больший вес хорошо экспонированным пикселям и меньший вес плохо экспонированным.
@@ -221,13 +197,13 @@ class HDR:
         '''
         px = list(range(0, 256))
         fig = plt.figure(constrained_layout=False, figsize=(5, 5))
-        plt.title("Кривые отклика", fontsize=20)
         plt.plot(px, np.exp(self.gR), 'r')
         plt.plot(px, np.exp(self.gB), 'b')
         plt.plot(px, np.exp(self.gG), 'g')
         plt.ylabel("log(X)", fontsize=20)
         plt.xlabel("Значение пикселя", fontsize=20)
-        plt.show()
+        # plt.title("Кривые отклика", fontsize=20)
+        # plt.show()
         output_path = os.path.join('results', 'curvesCRF.png')
         fig.savefig(output_path)
 
@@ -311,9 +287,9 @@ class PostProcess(HDR):
         self.imgf32 = (hdr / np.amax(hdr) * 255).astype(np.float32)
         self.save_hdr_image()  # Сохраняем HDR-изображение перед тоновым отображением
         fig = plt.figure(constrained_layout=False, figsize=(10, 10))
-        plt.title("Карта освещенности HDR изображения", fontsize=20)
+        # plt.title("Карта освещенности HDR изображения", fontsize=20)
         plt.imshow(cv2.cvtColor(self.imgf32, cv2.COLOR_BGR2RGB))
-        plt.show()
+        # plt.show()
         output_path = os.path.join('results', 'radianceMap.png')
         fig.savefig(output_path)
 
@@ -330,9 +306,9 @@ class PostProcess(HDR):
         ldr_image = tonemap.process(hdr_image)
 
         # Отображение изображения
-        plt.imshow(cv2.cvtColor(ldr_image, cv2.COLOR_BGR2RGB))
-        plt.axis('off')  # Убрать оси координат
-        plt.show()
+        # plt.imshow(cv2.cvtColor(ldr_image, cv2.COLOR_BGR2RGB))
+        # plt.axis('off')  # Убрать оси координат
+        # plt.show()
         # Сохранение отображенного изображения
         ldr_image = cv2.normalize(ldr_image, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
         cv2.imwrite('tone_mapping_ldr.jpg', ldr_image)
@@ -367,9 +343,9 @@ class PostProcess(HDR):
         ldr_image = cv2.normalize(ldr_image, None, alpha=alpha, beta=beta, norm_type=cv2.NORM_MINMAX)
         ldr_image = np.clip(ldr_image, 0, 255).astype('uint8')
         # Отображение результата
-        plt.imshow(cv2.cvtColor(ldr_image, cv2.COLOR_BGR2RGB))
-        plt.axis('off')  # Убрать оси координат
-        plt.show()
+        # plt.imshow(cv2.cvtColor(ldr_image, cv2.COLOR_BGR2RGB))
+        # plt.axis('off')  # Убрать оси координат
+        # plt.show()
         # Сохранение отображенного изображения
         cv2.imwrite('photo_ldr.jpg', ldr_image)
 
@@ -414,14 +390,16 @@ def process():
 
         uploaded_files = request.files.getlist('images')
         filenames = []
+        images = []
         for file in uploaded_files:
             filename = secure_filename(file.filename)
+            images.append(filename)
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(file_path)
             filenames.append(file_path)
+
         # Обработка HDR
         mergeDebevec = HDR(app.config['UPLOAD_FOLDER'], filenames, exposure_times)
-        mergeDebevec.displayImages(figureSize=(20, 20))
         postProcess = PostProcess(mergeDebevec)
         postProcess.process()
         postProcess.plot_ResponseCurves()
@@ -442,11 +420,18 @@ def process():
         return str(e), 500
 
     # Если ни один из вышеуказанных путей не выполнен
-    return render_template('process.html')
+    return render_template('process.html', {
+                                            'filenames': images
+                                            }
+                           )
 
 @app.route('/results/<filename>')
 def results(filename):
     return send_from_directory('results', filename)
+
+@app.route('/uploads/<filename>')
+def uploads(filename):
+    return send_from_directory('uploads', filename)
 
 if __name__ == '__main__':
     app.run()

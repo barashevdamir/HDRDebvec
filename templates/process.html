@@ -45,11 +45,15 @@
 </head>
 <body>
     <h1>Исходные изображения</h1>
-    <img src="{{ url_for('results', filename='originals.png') }}" alt="Originals" width="400" height="300">
-    <h1>Кривые отклика</h1>
-    <img src="{{ url_for('results', filename='curvesCRF.png') }}" alt="Curves" width="400" height="300">
-    <h1>Карта освещенности</h1>
-    <img src="{{ url_for('results', filename='radianceMap.png') }}" alt="Curves" width="400" height="300">
+    {% for filename in filenames %}
+        <img src="{{ url_for('uploads', filename=filename) }}" alt="Originals" width="400" height="300">
+    {% endfor %}
+        <img src="{{ url_for('uploads', filename='image0.jpg') }}" alt="Originals" width="400" height="300">
+        <img src="{{ url_for('uploads', filename='image1.jpg') }}" alt="Originals" width="400" height="300">
+        <img src="{{ url_for('uploads', filename='image2.jpg') }}" alt="Originals" width="400" height="300">
+    <h1>Кривые отклика и карта освещенности</h1>
+    <img src="{{ url_for('results', filename='curvesCRF.png') }}" alt="Curves" width="400" height="400">
+    <img src="{{ url_for('results', filename='radianceMap.png') }}" alt="Map" width="400" height="400">
     <h1>Результат HDR обработки</h1>
     <h2>Фотографический метод</h2>
     <img src="{{ url_for('results', filename='photo_ldr.jpg') }}" alt="HDR Result" width="400" height="300">
