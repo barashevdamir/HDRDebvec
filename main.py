@@ -169,7 +169,7 @@ class HDR:
         # Веса wij используются для уменьшения влияния пикселей с очень высокой или очень низкой освещенностью.
 
         # Фиксация кривой путем установки ее среднего значения в ноль
-        U[k, 129] = 0
+        U[k, 127] = 0
         k += 1
 
         # Включение уравнений для плавности
@@ -200,7 +200,7 @@ class HDR:
         plt.plot(px, np.exp(self.gR), 'r')
         plt.plot(px, np.exp(self.gB), 'b')
         plt.plot(px, np.exp(self.gG), 'g')
-        plt.ylabel("log(X)", fontsize=20)
+        plt.ylabel("log(CRF)", fontsize=20)
         plt.xlabel("Значение пикселя", fontsize=20)
         # plt.title("Кривые отклика", fontsize=20)
         # plt.show()
@@ -281,7 +281,7 @@ class PostProcess(HDR):
         hdr = np.exp(hdr)
         hdr = np.reshape(np.transpose(hdr), (self.row, self.col, 3))
 
-        # десь hdr делится на сумму весов wsum, чтобы нормализовать результаты,
+        # Здесь hdr делится на сумму весов wsum, чтобы нормализовать результаты,
         # а затем применяется экспоненциальная функция для преобразования логарифмических значений обратно в освещенность.
 
         self.imgf32 = (hdr / np.amax(hdr) * 255).astype(np.float32)
