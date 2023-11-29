@@ -112,8 +112,8 @@ class HDR:
         X = np.log(self.times)  # Логарифмические времена экспозиции.
 
         # Массивы для хранения значений пикселей в выбранных местах
-        self.ZG = np.zeros((numSamples, self.N), dtype=np.uint8)
-        self.ZB = np.zeros((numSamples, self.N,), dtype=np.uint8)
+        self.ZB = np.zeros((numSamples, self.N), dtype=np.uint8)
+        self.ZG = np.zeros((numSamples, self.N,), dtype=np.uint8)
         self.ZR = np.zeros((numSamples, self.N), dtype=np.uint8)
 
         # Получение выбранных значений пикселей
@@ -193,8 +193,7 @@ class HDR:
             A[k, i + 2] = self.l * self.w[i + 1]
             k += 1
         # Решение системы с использованием метода сингулярного разложения (SVD)
-        x = np.linalg.lstsq(A, b)
-        x = x[0]
+        x = np.dot(np.linalg.pinv(A), b)
         CRF = x[0:n]
         lE = x[n: len(x)]
 
@@ -209,14 +208,29 @@ class HDR:
         px = list(range(0, 256))
         fig = plt.figure(constrained_layout=False, figsize=(5, 5))
         plt.title("Кривые отклика", fontsize=20)
-        plt.plot(px, np.exp(self.gR), 'r')
         plt.plot(px, np.exp(self.gB), 'b')
         plt.plot(px, np.exp(self.gG), 'g')
+        plt.plot(px, np.exp(self.gR), 'r')
         plt.ylabel("log(X)", fontsize=20)
         plt.xlabel("Значение пикселя", fontsize=20)
         plt.show()
         fig.savefig('curvesCRF.png')
 
+    # def process(self):
+    #     '''
+    #     Вызывает предыдущие методы для построения функции отклика и подготовки данных для восстановления карты яркости HDR.
+    #     '''
+    #     self.weightingFunction()
+    #     self.samplingPixelValues()
+    #
+    #     with ThreadPoolExecutor() as executor:
+    #         futures = [executor.submit(self.CRFsolve, self.ZB),
+    #                    executor.submit(self.CRFsolve, self.ZG),
+    #                    executor.submit(self.CRFsolve, self.ZR)]
+    #
+    #         self.gB, self.lEB = futures[0].result()
+    #         self.gG, self.lEG = futures[1].result()
+    #         self.gR, self.lER = futures[2].result()
     def process(self):
         '''
         Вызывает предыдущие методы для построения функции отклика и подготовки данных для восстановления карты яркости HDR.
@@ -224,14 +238,10 @@ class HDR:
         self.weightingFunction()
         self.samplingPixelValues()
 
-        with ThreadPoolExecutor() as executor:
-            futures = [executor.submit(self.CRFsolve, self.ZR),
-                       executor.submit(self.CRFsolve, self.ZG),
-                       executor.submit(self.CRFsolve, self.ZB)]
-
-            self.gR, self.lER = futures[0].result()
-            self.gG, self.lEG = futures[1].result()
-            self.gB, self.lEB = futures[2].result()
+        # Расчет функции отклика и логарифмических значений освещенности для каждого цветового канала
+        self.gB, self.lEB = self.CRFsolve(self.ZB)
+        self.gG, self.lEG = self.CRFsolve(self.ZG)
+        self.gR, self.lER = self.CRFsolve(self.ZR)
 
 
 class PostProcess(HDR):
@@ -358,18 +368,18 @@ class PostProcess(HDR):
 # восстанавливает карту яркости и применяется тоновое отображение.
 # Время выполнения каждого этапа измеряется и выводится.
 #
-# path = "uploads/"
-# filenames = ['image0.jpg', 'image1.jpg', 'image2.jpg']
-# exposure_times = [1/6.0, 1.3, 5.0]
-# mergeDebevec = HDR(path, filenames, exposure_times)
-# mergeDebevec.display_OriginalImages(figureSize=(20,20))
-# start_time = time.time()
-# postProcess = PostProcess(mergeDebevec)
-# postProcess.process()
-# postProcess.plot_ResponseCurves()
-# print(time.time() - start_time)
-# start_time = time.time()
-# postProcess.recover_HDR_RadianceMap()
-# print(time.time() - start_time)
-# ldr_image = postProcess.tone_mapping()
-# ldr_image = postProcess.photograph_tone_mapping()
+path = "uploads/"
+filenames = ['image0.jpg', 'image1.jpg', 'image2.jpg']
+exposure_times = [1/2000, 1/750, 1/250]
+mergeDebevec = HDR(path, filenames, exposure_times)
+mergeDebevec.display_OriginalImages(figureSize=(20,20))
+start_time = time.time()
+postProcess = PostProcess(mergeDebevec)
+postProcess.process()
+postProcess.plot_ResponseCurves()
+print(time.time() - start_time)
+start_time = time.time()
+postProcess.recover_HDR_RadianceMap()
+print(time.time() - start_time)
+ldr_image = postProcess.tone_mapping()
+ldr_image = postProcess.photograph_tone_mapping()

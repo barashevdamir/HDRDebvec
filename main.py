@@ -1,16 +1,13 @@
 import cv2
 import os
 import numpy as np
-from IPython.display import Image
 import matplotlib.pyplot as plt
-from matplotlib import gridspec
 import math
 import warnings
 warnings.filterwarnings("ignore")
-import time
 from concurrent.futures import ThreadPoolExecutor
-from flask import Flask, render_template, request, redirect, url_for, send_file, session, send_from_directory
-from flask_session import Session  # Добавьте эту библиотеку
+from flask import Flask, render_template, request, redirect, url_for, session, send_from_directory
+from flask_session import Session
 from werkzeug.utils import secure_filename
 
 
@@ -169,7 +166,7 @@ class HDR:
         # Веса wij используются для уменьшения влияния пикселей с очень высокой или очень низкой освещенностью.
 
         # Фиксация кривой путем установки ее среднего значения в ноль
-        U[k, 127] = 0
+        U[k, 129] = 0
         k += 1
 
         # Включение уравнений для плавности
@@ -182,8 +179,7 @@ class HDR:
         # Это помогает гарантировать, что функция будет изменяться плавно, что важно для точного восстановления освещенности.
 
         # Решение системы с использованием метода наименьших квадратов
-        M = np.linalg.lstsq(U, V)
-        M = M[0]
+        M = np.dot(np.linalg.pinv(U), V)
         CRF = M[0:n]
         logE = M[n: len(M)]
 
@@ -197,19 +193,19 @@ class HDR:
         '''
         px = list(range(0, 256))
         fig = plt.figure(constrained_layout=False, figsize=(5, 5))
-        plt.plot(px, np.exp(self.gR), 'r')
-        plt.plot(px, np.exp(self.gB), 'b')
-        plt.plot(px, np.exp(self.gG), 'g')
+        plt.plot(px, np.exp(self.CRFB), 'b')
+        plt.plot(px, np.exp(self.CRFG), 'g')
+        plt.plot(px, np.exp(self.CRFR), 'r')
         plt.ylabel("log(CRF)", fontsize=20)
         plt.xlabel("Значение пикселя", fontsize=20)
-        # plt.title("Кривые отклика", fontsize=20)
+        plt.title("Кривые отклика", fontsize=20)
         # plt.show()
         output_path = os.path.join('results', 'curvesCRF.png')
         fig.savefig(output_path)
 
     def process(self):
         '''
-        Вызывает предыдущие методы для построения функции отклика и подготовки данных для восстановления карты яркости HDR.
+        Вызывает предыдущие методы для построения функции отклика и подготовки данных для восстановления карты освещенности HDR.
         '''
         self.weightingFunction()
         self.samplingValues()
@@ -219,9 +215,9 @@ class HDR:
                        executor.submit(self.CRFsolve, self.ZG),
                        executor.submit(self.CRFsolve, self.ZB)]
 
-            self.gR, self.lER = futures[0].result()
-            self.gG, self.lEG = futures[1].result()
-            self.gB, self.lEB = futures[2].result()
+            self.CRFB, self.lEB = futures[0].result()
+            self.CRFG, self.lEG = futures[1].result()
+            self.CRFR, self.lER = futures[2].result()
 
 
 class PostProcess(HDR):
@@ -233,7 +229,7 @@ class PostProcess(HDR):
     def __init__(self, HDR):
         super().__init__(path, filenames, exposure_times)
 
-    def save_hdr_image(self, filename='hdr_image.hdr'):
+    def save_hdr_image(self, filename='results/hdr_image.hdr'):
         '''
         Метод save_hdr_image сохраняет HDR-изображение в формате, который может быть использован другими программами и устройствами, поддерживающими HDR.
 
@@ -266,15 +262,15 @@ class PostProcess(HDR):
             # В этом цикле для каждого изображения в серии вычисляются веса wij_B, wij_G, и wij_R для каждого канала (синего, зеленого и красного соответственно).
             # Эти веса используются для уменьшения влияния пикселей с очень высокой или очень низкой освещенностью.
 
-            m0 = np.subtract(self.gB[self.flattenImage[i, 0]], lnDt[i])[:, 0]
-            m1 = np.subtract(self.gG[self.flattenImage[i, 1]], lnDt[i])[:, 0]
-            m2 = np.subtract(self.gR[self.flattenImage[i, 2]], lnDt[i])[:, 0]
+            m0 = np.subtract(self.CRFB[self.flattenImage[i, 0]], lnDt[i])[:, 0]
+            m1 = np.subtract(self.CRFG[self.flattenImage[i, 1]], lnDt[i])[:, 0]
+            m2 = np.subtract(self.CRFR[self.flattenImage[i, 2]], lnDt[i])[:, 0]
 
             hdr[0] = hdr[0] + np.multiply(m0, wij_B)
             hdr[1] = hdr[1] + np.multiply(m1, wij_G)
             hdr[2] = hdr[2] + np.multiply(m2, wij_R)
 
-        #     Здесь m0, m1, и m2 вычисляются как разность между значениями функции отображения камеры (gB, gG, gR для каждого цветового канала)
+        #     Здесь m0, m1, и m2 вычисляются как разность между значениями функции отображения камеры (CRFB, CRFG, CRFR для каждого цветового канала)
         #     и логарифмом времени экспозиции. Эти значения умножаются на соответствующие веса и добавляются к hdr, что помогает восстановить карту освещености.
 
         hdr = np.divide(hdr, wsum)
@@ -296,22 +292,23 @@ class PostProcess(HDR):
 
     def tone_mapping(self):
         '''
-        Метод tone_mapping преобразует карту радианса HDR в формат, пригодный для отображения на стандартных дисплеях.
+        Метод tone_mapping преобразует карту освещенности HDR в формат, пригодный для отображения на стандартных дисплеях.
         Это включает в себя сжатие диапазона яркости и контраста, чтобы изображение выглядело естественно на не-HDR дисплеях.
         '''
-        hdr_image = cv2.imread('hdr_image.hdr', cv2.IMREAD_ANYDEPTH)
+        hdr_image = cv2.imread('results/hdr_image.hdr', cv2.IMREAD_ANYDEPTH)
 
         # Применение тонирования для отображения на стандартном дисплее
         tonemap = cv2.createTonemap(3.0)  # Гамма-коррекция
         ldr_image = tonemap.process(hdr_image)
 
         # Отображение изображения
-        # plt.imshow(cv2.cvtColor(ldr_image, cv2.COLOR_BGR2RGB))
+        plt.imshow(cv2.cvtColor(ldr_image, cv2.COLOR_BGR2RGB))
         # plt.axis('off')  # Убрать оси координат
         # plt.show()
         # Сохранение отображенного изображения
         ldr_image = cv2.normalize(ldr_image, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-        cv2.imwrite('tone_mapping_ldr.jpg', ldr_image)
+        output_path = os.path.join(app.config['RESULTS_FOLDER'], 'tone_mapping_ldr.jpg')
+        cv2.imwrite(output_path, ldr_image)
 
         return ldr_image
 
@@ -319,7 +316,7 @@ class PostProcess(HDR):
         '''
         Фотографический метод тонового отображения для преобразования HDR-изображения в LDR.
         '''
-        hdr_image = cv2.imread('hdr_image.hdr', cv2.IMREAD_ANYDEPTH)
+        hdr_image = cv2.imread('results/hdr_image.hdr', cv2.IMREAD_ANYDEPTH)
 
         # Преобразование HDR-изображения в градации серого
         lum = cv2.cvtColor(hdr_image, cv2.COLOR_BGR2GRAY)
@@ -342,12 +339,9 @@ class PostProcess(HDR):
         # Нормализация и преобразование в формат, подходящий для отображения
         ldr_image = cv2.normalize(ldr_image, None, alpha=alpha, beta=beta, norm_type=cv2.NORM_MINMAX)
         ldr_image = np.clip(ldr_image, 0, 255).astype('uint8')
-        # Отображение результата
-        # plt.imshow(cv2.cvtColor(ldr_image, cv2.COLOR_BGR2RGB))
-        # plt.axis('off')  # Убрать оси координат
-        # plt.show()
         # Сохранение отображенного изображения
-        cv2.imwrite('photo_ldr.jpg', ldr_image)
+        output_path = os.path.join(app.config['RESULTS_FOLDER'], 'photo_ldr.jpg')
+        cv2.imwrite(output_path, ldr_image)
 
         return ldr_image
 
